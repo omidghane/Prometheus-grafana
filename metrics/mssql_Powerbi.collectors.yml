@@ -1,0 +1,70 @@
+# A collector defining standard metrics for Microsoft SQL Server.
+#
+# It is required that the SQL Server user has the following permissions:
+#
+#   GRANT VIEW ANY DEFINITION TO
+#   GRANT VIEW SERVER STATE TO
+#
+collector_name: mssql_Powerbi
+
+# Similar to global.min_interval, but applies to the queries defined by this collector only.
+#min_interval: 0s
+
+metrics:
+  - metric_name: mssql_local_time_seconds
+    type: gauge
+    help: 'Local time in seconds since epoch (Unix time).'
+    values: [unix_time]
+    query: |
+      SELECT DATEDIFF(second, '19700101', GETUTCDATE()) AS unix_time
+
+
+  - metric_name: mssql_lastdaterefresh
+    type: gauge
+    help: 'mssql_lastdaterefresh'
+    value_label: 'state'
+    key_labels:
+      [RootFolder,ReportPath]
+    values: [MinutesSinceLastRun]
+    query: |
+        SELECT 
+            RootFolder,
+            ReportName,
+            ReportPath,
+            LastRun,
+            MinutesSinceLastRun
+        FROM (
+            SELECT 
+                CASE 
+                    WHEN CHARINDEX('/', c.Path, 2) > 0 
+                        THEN LEFT(c.Path, CHARINDEX('/', c.Path, 2) - 1)
+                    ELSE c.Path
+                END AS RootFolder,
+                c.Name AS ReportName,
+                c.Path AS ReportPath,
+                le.LastRun,
+                le.MinutesSinceLastRun
+            FROM (
+                SELECT 
+                    ItemPath,
+                    MAX(TimeStart) AS LastRun,
+                    DATEDIFF(MINUTE, MAX(TimeStart), GETDATE()) AS MinutesSinceLastRun 
+                FROM 
+                    ReportServer_May2024.dbo.ExecutionLog3
+                GROUP BY 
+                    ItemPath
+            ) le
+            JOIN 
+                ReportServer_May2024.dbo.Catalog c ON le.ItemPath = c.Path
+            WHERE 
+                le.LastRun <= DATEADD(DAY, -1, GETDATE())
+        ) AS sub
+        ORDER BY 
+            RootFolder,
+            LastRun DESC;
+
+
+
+      
+      
+

@@ -1,0 +1,414 @@
+# A collector defining standard metrics for Microsoft SQL Server.
+#
+# It is required that the SQL Server user has the following permissions:
+#
+#   GRANT VIEW ANY DEFINITION TO
+#   GRANT VIEW SERVER STATE TO
+#
+collector_name: mssql_standard
+
+# Similar to global.min_interval, but applies to the queries defined by this collector only.
+#min_interval: 0s
+
+metrics:
+  - metric_name: user_connections
+    type: gauge
+    help: 'Which user is connected to the database'
+    values: [count]
+    query: |
+      SELECT 
+        c.client_net_address, 
+        s.host_name, 
+        s.login_name, 
+        s.database_id,
+        DB_NAME(s.database_id) AS database_name, 
+        r.status AS session_status,
+        r.command AS current_command, 
+        r.cpu_time, 
+        r.total_elapsed_time 
+      FROM sys.dm_exec_sessions s
+      JOIN sys.dm_exec_connections c
+        ON s.session_id = c.session_id
+      JOIN sys.dm_exec_requests r
+        ON s.session_id = r.session_id
+      WHERE s.host_name = 'ACC-BI-SRV'
+        AND DB_NAME(s.database_id) = 'master';
+
+  - metric_name: mssql_local_time_seconds
+    type: gauge
+    help: 'Local time in seconds since epoch (Unix time).'
+    values: [unix_time]
+    query: |
+      SELECT DATEDIFF(second, '19700101', SWITCHOFFSET(SYSDATETIMEOFFSET(), '+04:30')) AS unix_time
+
+  - metric_name: mssql_connections
+    type: gauge
+    help: 'Number of active connections.'
+    key_labels:
+      - db
+    values: [count]
+    query: |
+      SELECT DB_NAME(sp.dbid) AS db, COUNT(sp.spid) AS count
+      FROM sys.sysprocesses sp
+      where DB_NAME(sp.dbid) is not null
+      GROUP BY DB_NAME(sp.dbid)
+
+  #
+  # Collected from sys.dm_os_performance_counters
+  #
+  - metric_name: mssql_deadlocks
+    type: counter
+    help: 'Number of lock requests that resulted in a deadlock.'
+    values: [cntr_value]
+    query: |
+      SELECT cntr_value
+      FROM sys.dm_os_performance_counters WITH (NOLOCK)
+      WHERE counter_name = 'Number of Deadlocks/sec' AND instance_name = '_Total'
+
+  - metric_name: mssql_user_errors
+    type: counter
+    help: 'Number of user errors.'
+    values: [cntr_value]
+    query: |
+      SELECT cntr_value
+      FROM sys.dm_os_performance_counters WITH (NOLOCK)
+      WHERE counter_name = 'Errors/sec' AND instance_name = 'User Errors'
+
+  - metric_name: mssql_kill_connection_errors
+    type: counter
+    help: 'Number of severe errors that caused SQL Server to kill the connection.'
+    values: [cntr_value]
+    query: |
+      SELECT cntr_value
+      FROM sys.dm_os_performance_counters WITH (NOLOCK)
+      WHERE counter_name = 'Errors/sec' AND instance_name = 'Kill Connection Errors'
+
+  - metric_name: mssql_page_life_expectancy_seconds
+    type: gauge
+    help: 'The minimum number of seconds a page will stay in the buffer pool on this node without references.'
+    values: [cntr_value]
+    query: |
+      SELECT top(1) cntr_value
+      FROM sys.dm_os_performance_counters WITH (NOLOCK)
+      WHERE counter_name = 'Page life expectancy'
+
+  - metric_name: mssql_batch_requests
+    type: counter
+    help: 'Number of command batches received.'
+    values: [cntr_value]
+    query: |
+      SELECT cntr_value
+      FROM sys.dm_os_performance_counters WITH (NOLOCK)
+      WHERE counter_name = 'Batch Requests/sec'
+
+  - metric_name: mssql_log_growths
+    type: counter
+    help: 'Number of times the transaction log has been expanded, per database.'
+    key_labels:
+      - db
+    values: [cntr_value]
+    query: |
+      SELECT rtrim(instance_name) AS db, cntr_value
+      FROM sys.dm_os_performance_counters WITH (NOLOCK)
+      WHERE counter_name = 'Log Growths' AND instance_name <> '_Total'
+
+  #
+  # Collected from sys.dm_io_virtual_file_stats
+  #
+  - metric_name: mssql_io_stall_seconds
+    type: counter
+    help: 'Stall time in seconds per database and I/O operation.'
+    key_labels:
+      - db
+    value_label: operation
+    values:
+      - read
+      - write
+    query_ref: mssql_io_stall
+
+
+  - metric_name: mssql_io_stall_total_seconds
+    type: counter
+    help: 'Total stall time in seconds per database.'
+    key_labels:
+      - db
+    values:
+      - io_stall
+    query_ref: mssql_io_stall
+  #
+  # Collected from sys.dm_os_process_memory
+  #
+  - metric_name: mssql_resident_memory_bytes
+    type: gauge
+    help: 'SQL Server resident memory size (AKA working set).'
+    values: [resident_memory_bytes]
+    query_ref: mssql_process_memory
+
+
+
+
+  - metric_name: mssql_virtual_memory_bytes
+    type: gauge
+    help: 'SQL Server committed virtual memory size.'
+    values: [virtual_memory_bytes]
+    query_ref: mssql_process_memory
+
+  - metric_name: mssql_memory_utilization_percentage
+    type: gauge
+    help: 'The percentage of committed memory that is in the working set.'
+    values: [memory_utilization_percentage]
+    query_ref: mssql_process_memory
+
+  - metric_name: mssql_page_fault_count
+    type: counter
+    help: 'The number of page faults that were incurred by the SQL Server process.'
+    values: [page_fault_count]
+    query_ref: mssql_process_memory
+    
+  - metric_name: mssql_instance_local_time
+    type: gauge
+    help: 'mssql_instance_local_time'
+    values: [ss]
+    query_ref: mssql_instance_local_time 
+    
+  - metric_name: mssql_total_physical_memory_kb
+    type: gauge
+    help: 'total_physical_memory_kb'
+    values: [total_physical_memory_kb]
+    query_ref: mssql_os_sys_memory2
+    
+    
+  - metric_name: mssql_available_physical_memory_kb
+    type: gauge
+    help: 'available_physical_memory_kb'
+    values: [available_physical_memory_kb]
+    query_ref: mssql_os_sys_memory2       
+  
+  - metric_name: mssql_total_page_file_kb
+    type: gauge
+    help: 'total_page_file_kb'
+    values: [total_page_file_kb]
+    query_ref: mssql_os_sys_memory2 
+    
+  - metric_name: mssql_available_page_file_kb
+    type: gauge
+    help: 'available_page_file_kb'
+    values: [available_page_file_kb]
+    query_ref: mssql_os_sys_memory2   
+  #
+  # Collected from sys.dm_os_sys_memory
+  #
+  - metric_name: mssql_os_memory
+    type: gauge
+    help: 'OS physical memory, used and available.'
+    value_label: 'state'
+    values: [used, available]
+    query: |
+      SELECT
+        (total_physical_memory_kb - available_physical_memory_kb) * 1024 AS used,
+        available_physical_memory_kb * 1024 AS available
+      FROM sys.dm_os_sys_memory
+
+ 
+      
+  - metric_name: mssql_os_sys_memory
+    type: gauge
+    help: 'mssql_os_sys_memory'
+    value_label: 'state'
+    values: [used, available]
+    query: |
+      SELECT
+        (total_page_file_kb - available_page_file_kb) * 1024 AS used,
+        available_page_file_kb * 1024 AS available
+      FROM sys.dm_os_sys_memory 
+
+
+  - metric_name: mssql_os_cpu_count
+    type: gauge
+    help: 'cpu_count'
+    value_label: 'state'
+    values: [cpu_count]
+    query: |
+      SELECT cpu_count FROM [sys].[dm_os_sys_info]        
+
+
+  - metric_name: mssql_os_sys_Drive
+    type: gauge
+    help: 'Drive_sys_memory'
+    value_label: 'state'
+    key_labels:
+      - volume_mount_point
+    values: [Size_in_GB, Free_in_GB,FreePercentage]
+    query: |
+      SELECT DISTINCT
+       (volume_mount_point),
+       total_bytes / 1073741824 AS Size_in_GB,
+       available_bytes / 1073741824 AS Free_in_GB,
+       (
+           SELECT ((available_bytes / 1073741824 * 1.0) / (total_bytes / 1073741824 * 1.0) * 100)
+       ) AS FreePercentage
+        FROM sys.master_files AS f
+        CROSS APPLY sys.dm_os_volume_stats(f.database_id, f.file_id)
+        GROUP BY volume_mount_point,
+         total_bytes / 1073741824,
+         available_bytes / 1073741824 
+         
+  - metric_name: mssql_process
+    type: gauge
+    help: 'mssql_process'
+    value_label: 'state'
+    key_labels:
+      [JobName,run_date,run_duration]
+    values: [aa]
+    query: |
+         select JobName,run_date,run_duration,case when run_duration >= case when AVG(run_duration ) over(partition by JobName order by run_date) =0 then 1 else AVG(run_duration ) over(partition by JobName order by run_date) end * 2 then 1 else 0 end aa from (select
+         j.name as 'JobName',
+         CONVERT (datetime,convert(char(8), run_date)) run_date,
+         max( run_duration) as run_duration,
+         1 NumberOfConnections
+         From msdb.dbo.sysjobs j
+         INNER JOIN msdb.dbo.sysjobhistory h
+         ON j.job_id = h.job_id
+         where j.enabled = 1 and CONVERT (datetime,convert(char(8), run_date))  > GETDATE()-20  
+         group by j.name,run_date) ss
+
+
+
+  - metric_name: mssql_Jobs
+    type: gauge
+    help: 'mssql_Jobs'
+    value_label: 'state'
+    key_labels:
+      [JobName,step_name,Outcome,step_id]
+    values: [resualt]
+    query: |
+        SELECT distinct name AS JobName,step_id
+         ,sjh.step_name
+                     ,CASE WHEN SJH.run_status=0 THEN 'Failed'
+                     WHEN SJH.run_status=1 THEN 'Succeeded'
+                     WHEN SJH.run_status=2 THEN 'Retry'
+                     WHEN SJH.run_status=3 THEN 'Cancelled'
+               ELSE 'Unknown'
+          END as Outcome,
+                 SJH.run_status As resualt
+         FROM   [msdb].[dbo].[sysjobhistory] SJH
+         JOIN   [msdb].[dbo].[sysjobs] SJ
+         ON     SJH.job_id=sj.job_id
+         WHERE     DATEADD(S,
+         (run_time/10000)*60*60
+        +((run_time - (run_time/10000) * 10000)/100) * 60
+        + (run_time - (run_time/100) * 100),
+        CONVERT(DATETIME,RTRIM(run_date),113)) >= DATEADD(hh,-2,GetDate()) and SJH.run_status <> 1
+        
+
+  - metric_name: mssql_Jobs_cnt
+    type: gauge
+    help: 'mssql_Jobs_cnt'
+    value_label: 'state'
+    values: [cnt]
+    query: |
+        SELECT count(distinct name) cnt
+         FROM   [msdb].[dbo].[sysjobhistory] SJH
+         JOIN   [msdb].[dbo].[sysjobs] SJ
+         ON     SJH.job_id=sj.job_id
+         WHERE     DATEADD(S,
+         (run_time/10000)*60*60
+        +((run_time - (run_time/10000) * 10000)/100) * 60
+        + (run_time - (run_time/100) * 100),
+        CONVERT(DATETIME,RTRIM(run_date),113)) >= DATEADD(d,-2,GetDate())
+        and SJH.run_status <> 1
+        
+
+  - metric_name: mssql_sessions
+    type: gauge
+    help: 'mssql_sessions'
+    value_label: 'state'
+    key_labels:
+      [session_id, login_time, host_name, program_name, login_name, status]
+    values: [cpu_time, memory_usage, total_elapsed_time]
+    query: |
+        SELECT  session_id, login_time, host_name, program_name, login_name, status, cpu_time, memory_usage, total_elapsed_time FROM sys.dm_exec_sessions WHERE is_user_process = 1;
+
+  - metric_name: mssql_mldf
+    type: gauge
+    help: 'mssql_mldf'
+    value_label: 'state'
+    key_labels:
+      [DatabaseName,Logical_Name,Physical_Name]
+    values: [SizeMB]
+    query: |
+        SELECT DB_NAME(database_id) AS DatabaseName, [Name] AS Logical_Name, Physical_Name, (size*8)/1024 SizeMB FROM sys.master_files
+
+  - metric_name: mssql_replica
+    type: gauge
+    help: 'mssql_mldf'
+    value_label: 'state'
+    key_labels:
+      [replica_server_name,role_desc,operational_state_desc,connected_state_desc,synchronization_health_desc]
+    values: [cntr_value]
+    query: |
+         select aa.replica_server_name ,bb.role_desc,isnull(operational_state_desc,'OFFLINE') as operational_state_desc,bb.connected_state_desc,bb.synchronization_health_desc,1 as cntr_value from sys.dm_hadr_availability_replica_cluster_states aa     inner join  sys.dm_hadr_availability_replica_states bb   on aa.replica_id=bb.replica_id
+ 
+  - metric_name: mssql_PercentLog
+    type: gauge
+    help: 'mssql_mldf'
+    value_label: 'state'
+    key_labels:
+      [instance_name]
+    values: [cntr_value]
+    query: |
+        SELECT instance_name,cntr_value FROM sys.dm_os_performance_counters where counter_name in ('Percent Log Used') and instance_name not in ('mssqlsystemresource','master','msdb','model','_Total') 
+
+
+  - metric_name: mssql_databaselogs
+    type: gauge
+    help: 'mssql_databselogs'
+    value_label: 'state'
+    key_labels:
+      [counter_name,instance_name]
+    values: [cntr_value]
+    query: |
+        SELECT rtrim(ltrim(counter_name)) counter_name,instance_name,cntr_value FROM sys.dm_os_performance_counters WHERE object_name LIKE '%Databases%' and  counter_name in ('Log File(s) Used Size (KB)','Percent Log Used','Log Growths','Log Shrinks','Shrink Data Movement Bytes/sec')
+
+
+
+queries:
+  # Populates `mssql_io_stall` and `mssql_io_stall_total`
+  - query_name: mssql_io_stall
+    query: |
+      SELECT
+        cast(DB_Name(a.database_id) as varchar) AS [db],
+        sum(io_stall_read_ms) / 1000.0 AS [read],
+        sum(io_stall_write_ms) / 1000.0 AS [write],
+        sum(io_stall) / 1000.0 AS io_stall
+      FROM
+        sys.dm_io_virtual_file_stats(null, null) a
+      INNER JOIN sys.master_files b ON a.database_id = b.database_id AND a.file_id = b.file_id
+      GROUP BY a.database_id
+
+  # Populates `mssql_resident_memory_bytes`, `mssql_virtual_memory_bytes`, `mssql_memory_utilization_percentage` and
+  # `mssql_page_fault_count`.
+  - query_name: mssql_process_memory
+    query: |
+      SELECT
+        physical_memory_in_use_kb * 1024 AS resident_memory_bytes,
+        virtual_address_space_committed_kb * 1024 AS virtual_memory_bytes,
+        memory_utilization_percentage,
+        page_fault_count
+      FROM sys.dm_os_process_memory
+      
+  - query_name: mssql_os_sys_memory2
+    query: |
+      SELECT 
+       total_physical_memory_kb,
+       available_physical_memory_kb,
+       total_page_file_kb,
+       available_page_file_kb 
+      FROM sys.dm_os_sys_memory
+
+  - query_name: mssql_instance_local_time
+    query: |
+      SELECT DATEDIFF(second, '19700101', GETUTCDATE()) ss  
+      
+      
+

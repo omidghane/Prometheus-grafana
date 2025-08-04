@@ -1,0 +1,47 @@
+
+collector_name: mssql_standard_2
+
+
+metrics:
+  - metric_name: mssql_local_time_seconds
+    type: gauge
+    help: 'Local time in seconds since epoch (Unix time).'
+    values: [unix_time]
+    query: |
+      SELECT DATEDIFF(second, '19700101', GETUTCDATE()) AS unix_time
+
+  - metric_name: mssql_replication
+    type: gauge
+    help: 'mssql_Jobs'
+    value_label: 'state'
+    key_labels:
+      - RunStatusDesc
+    values: [runstatus]
+    query: |
+      SELECT
+          a.name AS AgentName,
+          a.publisher_db,
+          a.subscriber_db,
+          a.subscriber_name,
+          h.runstatus,
+          CASE h.runstatus
+              WHEN 1 THEN 'Start'
+              WHEN 2 THEN 'Succeeded'
+              WHEN 3 THEN 'In Progress'
+              WHEN 4 THEN 'Idle'
+              WHEN 5 THEN 'Retrying'
+              WHEN 6 THEN 'Failed'
+              ELSE 'Unknown'
+          END AS RunStatusDesc,
+          h.start_time,
+          h.time,
+          h.comments,
+          h.error_id
+      FROM distribution.dbo.MSdistribution_agents a
+      JOIN distribution.dbo.MSdistribution_history h ON a.id = h.agent_id
+      WHERE h.time = (
+          SELECT MAX(time)
+          FROM distribution.dbo.MSdistribution_history
+          WHERE agent_id = a.id
+      ) AND subscriber_db ='MabnaERP'
+      ORDER BY h.time DESC;
