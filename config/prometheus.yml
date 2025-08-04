@@ -1,0 +1,74 @@
+---
+global:
+  scrape_interval: 15s  # By default, scrape targets every 15 seconds.
+
+  # Attach these labels to any time series or alerts when communicating with
+  # external systems (federation, remote storage, Alertmanager).
+  # external_labels:
+  #  monitor: 'codelab-monitor'
+
+# A scrape configuration containing exactly one endpoint to scrape:
+# Here it's Prometheus itself.
+scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+  - job_name: 'prometheus'
+    # Override the global default and scrape targets from this job every 5 seconds.
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['localhost:9090']
+
+# Example job for node_exporter
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node_exporter:9100', '192.168.4.15:9100','192.168.4.32:9100']
+
+# Example job for cadvisor
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080','192.168.4.15:8080','192.168.4.32:8080']
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        target_label: "container_name"
+      - source_labels: ['__meta_docker_container_id']
+        target_label: "container_id"
+      
+  - job_name: 'docker-state-exporter'
+    static_configs:
+      - targets: ['192.168.3.24:8085','192.168.4.15:8085','192.168.4.32:8085']
+  
+      
+  - job_name: 'windows_servers'
+    static_configs:
+      - targets: ['192.168.4.40:9182', '192.168.3.23:9182', '192.168.4.10:9182', '192.168.4.44:9182','192.168.4.42:9182','192.168.4.132:9182','192.168.3.33:9182', '192.168.4.45:9182','192.168.3.13:9182','192.168.3.31:9182','192.168.4.12:9182',
+'192.168.4.13:9182','192.168.4.42:9182','192.168.4.43:9182','192.168.3.14:9182',
+'192.168.4.19:9182','192.168.3.4:9182','192.168.3.3:9182','192.168.4.14:9182',
+'192.168.3.22:9182','192.168.4.11:9182' ]
+      
+  #- job_name: 'linux_servers'
+   # static_configs:
+  #    - targets: ['192.168.4.15:9100']
+      
+  - job_name: "docker"
+    docker_sd_configs:
+      - host: "unix:///var/run/docker.sock"
+        refresh_interval: "1s"
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        target_label: "portal"
+      - source_labels: ['__meta_docker_container_id']
+        target_label: "cb7efe25729d"
+        
+  - job_name: 'telegraf-snmp'
+    static_configs:
+      - targets: ['192.168.3.24:9273']
+      
+
+  - job_name: 'mssql'
+    static_configs:
+      - targets: ['192.168.3.24:4000']
+      
+  - job_name: 'sql'
+    static_configs:
+      - targets: ['sql-exporter:9399']
+      
+      

@@ -1,0 +1,44 @@
+# Global settings and defaults.
+global:
+  # Subtracted from Prometheus' scrape_timeout to give us some headroom and prevent Prometheus from
+  # timing out first.
+  scrape_timeout_offset: 500ms
+  # Minimum interval between collector runs: by default (0s) collectors are executed on every scrape.
+  min_interval: 0s
+  # Maximum number of open connections to any one target. Metric queries will run concurrently on
+  # multiple connections.
+  max_connections: 3
+  # Maximum number of idle connections to any one target.
+  max_idle_connections: 3
+
+# The target to monitor and the list of collectors to execute on it.
+        
+jobs:        
+  - job_name: db_targets2
+    collectors: [mssql_standard]  # Collectors to execute
+    static_configs:
+      - targets:
+          4_40: "sqlserver://sa:symbian@192.168.4.40:1433"
+        labels:
+          cluster: cluster2
+          
+  - job_name: db_targets1
+    collectors: [mssql_standard_2]  # Collectors to execute
+    static_configs:
+      - targets:
+          4_42: "sqlserver://sa:symbian@192.168.4.42:1433"
+        labels:
+          cluster: cluster1
+  
+  - job_name: db_targets3
+    collectors: [mssql_Powerbi]  # Collectors to execute
+    static_configs:
+      - targets:
+          4_10: "sqlserver://sa:symbian@192.168.4.10:1433"
+        labels:
+          cluster: cluster3
+
+
+# Collector definition files.
+collector_files: 
+  - "/metrics/*.collectors.yml"

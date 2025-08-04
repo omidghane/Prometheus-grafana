@@ -1,0 +1,26 @@
+sources:
+  syslog:
+    type: syslog
+    address: "0.0.0.0:666"
+    mode: udp
+
+transforms:
+  parse_logs:
+    type: remap
+    inputs: [syslog]
+    source: |
+      .message = to_string(.message)
+      .host = .host ?? "sophos"
+
+sinks:
+  loki:
+    type: loki
+    inputs: [parse_logs]
+    endpoint: "http://loki:3100"
+    encoding:
+      codec: json
+    labels:
+      job: "sophos"
+      host: "{{ host }}"
+      source: "syslog"
+
