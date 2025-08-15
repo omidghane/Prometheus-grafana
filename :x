@@ -1,0 +1,14 @@
+{
+  "insecure-registries": ["192.168.4.15:6000"],
+  "dns": ["1.1.1.1", "1.0.0.1"],
+  "bip": "172.24.0.1/16",
+  "default-address-pools": [
+      {"base": "172.25.0.0/16", "size": 24},
+      {"base": "172.26.0.0/16", "size": 24}
+  ],
+  "log-driver": "loki",
+  "log-opts": {
+      "loki-url": "http://localhost:3100/loki/api/v1/push",
+      "loki-batch-size": "400"
+  }
+}

@@ -12,7 +12,7 @@ networks:
     
 services:
   prometheus:
-    image: 192.168.4.15:5000/prom/prometheus:latest
+    image: 192.168.4.15:6000/prom/prometheus:v3.5.0
     container_name: prometheus
     user: "0:0"
     ports:
@@ -26,7 +26,7 @@ services:
 
 
   grafana:
-    image: 192.168.4.15:5000/grafana/grafana:latest
+    image: 192.168.4.15:6000/grafana/grafana:12.2.0-16791878397
     container_name: grafana
     ports:
       - "3000:3000"
@@ -34,39 +34,65 @@ services:
       - grafana-data:/var/lib/grafana
     restart: unless-stopped
     
+  #loki:
+  #  user: "0:0"
+  #  image: grafana/loki:latest
+  #  container_name: loki
+  #  ports:
+  #    - "3100:3100"
+  #  command: -config.file=/etc/loki/loki-config.yml
+  #  volumes:
+  #    - ./loki/loki-config.yml:/etc/loki/loki-config.yml
+  #    - ./loki/chunks:/loki/chunks
+  #    - ./loki/index:/loki/index
+  #    - ./loki/cache:/loki/cache
+  #    - ./loki/rules:/loki/rules
+  #    - ./loki/rules-temp:/loki/rules-temp
+  #    - ./loki/wal:/wal
+  #    - ./loki/var-loki:/var/loki
+  #  restart: unless-stopped
+
+  # 
+  #promtail:
+  #  image: grafana/promtail:2.9.2
+  #  container_name: promtail
+  #  user: "0:0"
+  #  volumes:
+  #    - /var/log:/var/log
+  #    - ./promtail-config.yml:/etc/promtail/config.yml
+  #  command: -config.file=/etc/promtail/config.yml
+  #  restart: unless-stopped
+  #  depends_on:
+  #    - loki
+
   loki:
     image: grafana/loki:latest
     container_name: loki
+    volumes:
+      - ./loki:/etc/loki
     ports:
       - "3100:3100"
-    command: -config.file=/etc/loki/loki-config.yml
-    volumes:
-      - ./loki/loki-config.yml:/etc/loki/loki-config.yml
-      - ./loki/chunks:/loki/chunks
-      - ./loki/index:/loki/index
-      - ./loki/cache:/loki/cache
-      - ./loki/rules:/loki/rules
-      - ./loki/rules-temp:/loki/rules-temp
-      - ./loki/wal:/wal
-      - ./loki/var-loki:/var/loki
     restart: unless-stopped
-
-    
+    command: -config.file=/etc/loki/loki-config.yml
+    #networks:
+    #  - loki-net
   promtail:
     image: grafana/promtail:2.9.2
     container_name: promtail
-    user: "0:0"
     volumes:
       - /var/log:/var/log
-      - ./promtail-config.yml:/etc/promtail/config.yml
-    command: -config.file=/etc/promtail/config.yml
+      - ./promtail:/etc/promtail
+    ports:
+      - "1514:1514" # this is only needed if you are going to send syslogs
     restart: unless-stopped
-    depends_on:
-      - loki
+    command: -config.file=/etc/promtail/promtail-config.yml
+    #networks:
+    #  - loki-net
+    stop_grace_period: 5s
 
 
   node_exporter:
-    image: 192.168.4.15:5000/quay.io/prometheus/node-exporter:v1.9.1
+    image: 192.168.4.15:6000/quay.io/prometheus/node-exporter:v1.9.1
     container_name: node_exporter
     command: "--path.rootfs=/host"
     pid: host
@@ -77,7 +103,7 @@ services:
 
   
   cadvisor:
-    image: 192.168.4.15:5000/gcr.io/cadvisor/cadvisor:latest
+    image: 192.168.4.15:6000/gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
     ports:
       - 8080:8080
@@ -94,7 +120,7 @@ services:
     restart: unless-stopped
 
   docker_state_exporter:
-    image: karugaru/docker_state_exporter
+    image: 192.168.4.15:6000/karugaru/docker_state_exporter
     container_name: docker_state_exporter
     ports:
       - 8085:8080
@@ -168,7 +194,7 @@ services:
  #   restart: unless-stopped
 
   mssql-exporter:
-    image: awaragi/prometheus-mssql-exporter
+    image: 192.168.4.15:6000/awaragi/prometheus-mssql-exporter
     container_name: mssql-exporter
     ports:
       - "4000:4000"
@@ -180,7 +206,7 @@ services:
     restart: unless-stopped
     
   sql-exporter:
-    image: githubfree/sql_exporter
+    image: 192.168.4.15:6000/githubfree/sql_exporter
     container_name: sql-exporter
     ports:
       - "9399:9399"
